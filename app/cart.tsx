@@ -11,20 +11,34 @@ export default function CartScreen() {
   const [loading, setLoading] = useState(true);
   const [consumerName, setConsumerName] = useState('');
   const [orderTotal, setOrderTotal] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Replace with actual user id from auth
-  const userId = supabase.auth.getUser?.()?.id;
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const { data: sessionData } = (await supabase.auth.getSession());
+      setUserId(sessionData?.session?.user?.id);
+    };
+    fetchUserId();
+  }, []);
 
   useEffect(() => {
     const fetchCart = async () => {
+      const { data: sessionData } = (await supabase.auth.getSession());
       // Get cart for user
+      const userId = sessionData?.session?.user?.id;
+      console.log('handleAddToCart userId:', userId);
       const { data: cartData } = await supabase.from('cart').select('id').eq('user_id', userId).single();
+      console.log('Fetched cart data:', cartData);
       if (!cartData) return setLoading(false);
       // Get cart items and join with product info
-      const { data: items } = await supabase
-        .from('cart_item')
-        .select('id, product_id, quantity, product:product_id(id, name, details, price, image_url)')
+      const { data: items, error } = await supabase
+        .from('cart_items')
+        .select('id, product_id, quantity, products(id, name, description, price, image_url)')
         .eq('cart_id', cartData.id);
+      console.log('Fetched cart items:', items);
+      console.log('Error fetching items:', error);
+      console.log('Fetched items:', items);
       setCartItems(items || []);
       setOrderTotal((items || []).reduce((sum, item) => sum + (item.product?.price || 0) * item.quantity, 0));
       setLoading(false);
@@ -37,13 +51,13 @@ export default function CartScreen() {
     if (!item) return;
     const newQty = item.quantity + delta;
     if (newQty < 1) return;
-    await supabase.from('cart_item').update({ quantity: newQty }).eq('id', id);
+    await supabase.from('cart_items').update({ quantity: newQty }).eq('id', id);
     setCartItems((prev) => prev.map((i) => i.id === id ? { ...i, quantity: newQty } : i));
     setOrderTotal((prev) => prev + delta * (item.product?.price || 0));
   };
 
   const handleRemove = async (id: string) => {
-    await supabase.from('cart_item').delete().eq('id', id);
+    await supabase.from('cart_items').delete().eq('id', id);
     setCartItems((prev) => prev.filter((i) => i.id !== id));
     setOrderTotal(cartItems.filter((i) => i.id !== id).reduce((sum, item) => sum + (item.product?.price || 0) * item.quantity, 0));
   };
@@ -56,7 +70,7 @@ export default function CartScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#fce6b5' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f5efe4' }}>
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <Text>Loading cart...</Text>
         </View>
@@ -65,8 +79,8 @@ export default function CartScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fce6b5' }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#fce6b5' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5efe4' }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#f5efe4' }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
           <Ionicons name="arrow-back" size={28} color="#321901" />
         </TouchableOpacity>
@@ -162,7 +176,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 12,
-    backgroundColor: '#fce6b5',
+    backgroundColor: '#f5efe4',
   },
   name: {
     fontSize: 20,

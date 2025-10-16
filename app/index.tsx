@@ -16,10 +16,13 @@ export default function LoginScreen() {
     // If a saved session exists, try to restore and redirect
     const saved = getItem('supabaseSession');
     if (saved) {
-      // We assume session is valid; route to products
-      router.replace('/products');
+      // Delay navigation so Root Layout and Slot mount first
+      const t = setTimeout(() => {
+        router.replace('/products');
+      }, 50);
+      return () => clearTimeout(t);
     }
-  }, []);
+  }, [router]);
 
   const handleLogin = async () => {
     setLoading(true);

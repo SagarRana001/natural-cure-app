@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Animated, Button, FlatList, Image, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Button, FlatList, Image, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { syncCartItems } from '../lib/cartService';
 import { supabase } from '../lib/supabase';
 
 interface Product {
@@ -17,7 +18,7 @@ export default function ProductsScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [cart, setCart] = useState<Product[]>([]);
+  const [cart, setCart] = useState<any[]>([]);
   const [showNotif, setShowNotif] = useState(false);
   const notifAnim = useState(new Animated.Value(-80))[0];
   const [showModal, setShowModal] = useState(false);
@@ -48,73 +49,35 @@ export default function ProductsScreen() {
 
   const handleAddToCart = async () => {
     setShowModal(false);
-    // Get user id
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
-    if (userError || !userId || !selectedProduct) {
-      // Show error notification
-      setShowNotif(true);
-      Animated.timing(notifAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start(() => {
-        setTimeout(() => {
-          Animated.timing(notifAnim, {
-            toValue: -80,
-            duration: 400,
-            useNativeDriver: true,
-          }).start(() => setShowNotif(false));
-        }, 1200);
-      });
-      return;
-    }
-    // Get or create cart for user
-    let { data: cartData, error: cartError } = await supabase.from('cart').select('id').eq('user_id', userId).single();
-    if (cartError) {
-      // Show error notification
-      setShowNotif(true);
-      Animated.timing(notifAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start(() => {
-        setTimeout(() => {
-          Animated.timing(notifAnim, {
-            toValue: -80,
-            duration: 400,
-            useNativeDriver: true,
-          }).start(() => setShowNotif(false));
-        }, 1200);
-      });
-      return;
-    }
-    if (!cartData) {
-      const { data: newCart, error: newCartError } = await supabase.from('cart').insert({ user_id: userId }).select('id').single();
-      if (newCartError || !newCart) {
-        // Show error notification
-        setShowNotif(true);
-        Animated.timing(notifAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }).start(() => {
-          setTimeout(() => {
-            Animated.timing(notifAnim, {
-              toValue: -80,
-              duration: 400,
-              useNativeDriver: true,
-            }).start(() => setShowNotif(false));
-          }, 1200);
-        });
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        console.warn('Supabase getSession error:', sessionError);
+        Alert.alert('Authentication error', sessionError.message || 'Unable to get user session.');
         return;
       }
-      cartData = newCart;
-    }
-    // Add item to cart_item
-    const { error: cartItemError } = await supabase.from('cart_item').insert({ cart_id: cartData.id, product_id: selectedProduct.id, quantity: parseInt(quantity, 10) });
-    if (cartItemError) {
-      // Show error notification
+      const userId = sessionData?.session?.user?.id;
+      console.log('handleAddToCart userId:', userId, 'selectedProduct:', selectedProduct, 'quantity:', quantity);
+      if (!userId || !selectedProduct) {
+        Alert.alert('Not signed in', 'Please log in to add items to your cart.');
+        router.push('/login');
+        return;
+      }
+
+      // Ensure a sensible quantity
+      const qty = Math.max(1, parseInt(quantity, 10) || 1);
+
+      // Update local cart state
+      setCart((prev) => [...prev, { product_id: selectedProduct.id, quantity: qty, product: selectedProduct }]);
+
+      // Sync this cart item to Supabase
+      const synced = await syncCartItems(userId, [{ product_id: selectedProduct.id, quantity: qty }]);
+      // Update local representation with returned db id
+      if (synced && synced[0]) {
+        setCart((prev) => prev.map((c) => (c.product_id === synced[0].product_id && c.quantity === synced[0].quantity && !c.id) ? { ...c, id: synced[0].id } : c));
+      }
+
+      // Success notification animation
       setShowNotif(true);
       Animated.timing(notifAnim, {
         toValue: 0,
@@ -129,23 +92,10 @@ export default function ProductsScreen() {
           }).start(() => setShowNotif(false));
         }, 1200);
       });
-      return;
+    } catch (err) {
+      console.error('handleAddToCart unexpected error:', err);
+      Alert.alert('Error', 'An unexpected error occurred while adding to cart.');
     }
-    // Success notification
-    setShowNotif(true);
-    Animated.timing(notifAnim, {
-      toValue: 0,
-      duration: 400,
-      useNativeDriver: true,
-    }).start(() => {
-      setTimeout(() => {
-        Animated.timing(notifAnim, {
-          toValue: -80,
-          duration: 400,
-          useNativeDriver: true,
-        }).start(() => setShowNotif(false));
-      }, 1200);
-    });
   };
 
   const handleLogout = async () => {
@@ -164,7 +114,7 @@ export default function ProductsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fce6b5' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5efe4' }}>
       {showNotif && (
         <Animated.View style={{
           position: 'absolute',
@@ -190,7 +140,7 @@ export default function ProductsScreen() {
               value={quantity}
               onChangeText={setQuantity}
               keyboardType="numeric"
-              style={{ backgroundColor: '#fce6b5', borderRadius: 8, padding: 12, fontSize: 18, color: '#321901', width: '60%', textAlign: 'center', marginBottom: 16 }}
+              style={{ backgroundColor: '#f5efe4', borderRadius: 8, padding: 12, fontSize: 18, color: '#321901', width: '60%', textAlign: 'center', marginBottom: 16 }}
             />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
               <Button title="Cancel" color="#2a1400" onPress={() => setShowModal(false)} />
@@ -199,7 +149,7 @@ export default function ProductsScreen() {
           </View>
         </View>
       </Modal>
-      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: 12, backgroundColor: '#fce6b5' }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: 12, backgroundColor: '#f5efe4' }}>
         <TouchableOpacity onPress={() => router.push({ pathname: '/cart', params: { cart: JSON.stringify(cart) } })} style={{ marginRight: 16 }}>
           <Ionicons name="cart-outline" size={28} color="#2a3e00" />
         </TouchableOpacity>
@@ -207,14 +157,14 @@ export default function ProductsScreen() {
           <Ionicons name="log-out-outline" size={28} color="#2a1400" />
         </TouchableOpacity>
       </View>
-      <View style={{ flex: 1, padding: 16, backgroundColor: '#fce6b5' }}>
+      <View style={{ flex: 1, padding: 16, backgroundColor: '#f5efe4' }}>
         <Text style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 20, textAlign: 'center', color: '#618000' }}>Our Products</Text>
         <FlatList
           data={products}
           keyExtractor={(item) => item.id.toString()}
           renderItem={({ item }) => (
             <View style={{ backgroundColor: '#fff8e1', borderRadius: 12, marginBottom: 20, padding: 16, shadowColor: '#321901', shadowOpacity: 0.15, shadowRadius: 8, elevation: 2 }}>
-              <Image source={{ uri: item.image_url }} style={{ width: '100%', height: 180, borderRadius: 8, marginBottom: 12, backgroundColor: '#fce6b5' }} resizeMode="cover" />
+              <Image source={{ uri: item.image_url }} style={{ width: '100%', height: 180, borderRadius: 8, marginBottom: 12, backgroundColor: '#f5efe4' }} resizeMode="cover" />
               <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#321901', marginBottom: 6 }}>{item.name}</Text>
               <Text style={{ fontSize: 16, color: '#618000', marginBottom: 8 }}>{item.details}</Text>
               <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#2a3e00' }}>Price: ${item.price}</Text>

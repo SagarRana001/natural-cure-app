@@ -9,8 +9,8 @@ export default function ProductDetailsScreen() {
   const router = useRouter();
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: '#fce6b5' }}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#fce6b5' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#f5efe4' }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#f5efe4' }}>
         <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
           <Ionicons name="arrow-back" size={28} color="#321901" />
         </TouchableOpacity>
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     height: 240,
     borderRadius: 12,
     marginBottom: 20,
-    backgroundColor: '#fce6b5',
+    backgroundColor: '#f5efe4',
   },
   name: {
     fontSize: 26,
