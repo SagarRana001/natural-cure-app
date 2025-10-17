@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React from 'react';
 import { Button, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { removeItem } from '../lib/mmkv';
 
 export default function ProductDetailsScreen() {
   const { name, details, price, image_url } = useLocalSearchParams();
@@ -16,9 +17,12 @@ export default function ProductDetailsScreen() {
         </TouchableOpacity>
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={() => router.push({ pathname: '/cart' })} style={{ marginRight: 16 }}>
+            <Ionicons name="receipt-outline" size={28} color="#2a3e00" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push({ pathname: '/cart' })} style={{ marginRight: 16 }}>
             <Ionicons name="cart-outline" size={28} color="#2a3e00" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={async () => { await router.replace('/login'); }}>
+          <TouchableOpacity onPress={async () => { await router.replace('/login'); removeItem('user_type'); }}>
             <Ionicons name="log-out-outline" size={28} color="#2a1400" />
           </TouchableOpacity>
         </View>

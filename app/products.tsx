@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Button, FlatList, Image, Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { syncCartItems } from '../lib/cartService';
+import { removeItem } from '../lib/mmkv';
 import { supabase } from '../lib/supabase';
 
 interface Product {
@@ -100,6 +101,7 @@ export default function ProductsScreen() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    try { removeItem('user_type'); } catch (e) {}
     router.replace('/login');
   };
 
@@ -150,6 +152,9 @@ export default function ProductsScreen() {
         </View>
       </Modal>
       <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', padding: 12, backgroundColor: '#f5efe4' }}>
+        <TouchableOpacity onPress={() => router.push({ pathname: '/orders', params: { cart: JSON.stringify(cart) } })} style={{ marginRight: 16 }}>
+          <Ionicons name="receipt-outline" size={28} color="#2a3e00" />
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push({ pathname: '/cart', params: { cart: JSON.stringify(cart) } })} style={{ marginRight: 16 }}>
           <Ionicons name="cart-outline" size={28} color="#2a3e00" />
         </TouchableOpacity>

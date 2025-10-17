@@ -102,7 +102,17 @@ CREATE POLICY "Users can insert own orders" ON orders
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users can update own orders" ON orders
-    FOR UPDATE USING (auth.uid() = user_id);
+    FOR UPDATE USING (
+        COALESCE(auth.jwt()->'app_metadata'->>'role','') = 'operator' OR
+        COALESCE(auth.jwt()->'user_metadata'->>'role','') = 'operator'
+    );
+
+-- Allow operators to view all orders
+CREATE POLICY "Operators can view all orders" ON orders
+    FOR SELECT USING (
+        COALESCE(auth.jwt()->'app_metadata'->>'role','') = 'operator' OR
+        COALESCE(auth.jwt()->'user_metadata'->>'role','') = 'operator'
+    );
 
 -- ORDER ITEMS TABLE POLICIES
 -- Users can only access order items from their own orders
@@ -115,6 +125,13 @@ CREATE POLICY "Users can view own order items" ON order_items
         )
     );
 
+-- Allow operators to view all order items
+CREATE POLICY "Operators can view all order items" ON order_items
+    FOR SELECT USING (
+        COALESCE(auth.jwt()->'app_metadata'->>'role','') = 'operator' OR
+        COALESCE(auth.jwt()->'user_metadata'->>'role','') = 'operator'
+    );
+
 CREATE POLICY "Users can insert own order items" ON order_items
     FOR INSERT WITH CHECK (
         EXISTS (
@@ -122,6 +139,13 @@ CREATE POLICY "Users can insert own order items" ON order_items
             WHERE orders.id = order_items.order_id 
             AND orders.user_id = auth.uid()
         )
+    );
+
+-- Only operators can update order items (e.g., adjust quantities)
+CREATE POLICY "Operators can update order items" ON order_items
+    FOR UPDATE USING (
+        COALESCE(auth.jwt()->'app_metadata'->>'role','') = 'operator' OR
+        COALESCE(auth.jwt()->'user_metadata'->>'role','') = 'operator'
     );
 
 -- PRODUCT REVIEWS TABLE POLICIES
