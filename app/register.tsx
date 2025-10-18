@@ -35,6 +35,7 @@ export default function RegisterScreen() {
           name,
           contactNumber,
           address,
+          user_type: 'seller',
         },
       },
     });
@@ -52,6 +53,16 @@ export default function RegisterScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: ACCENT }}>
+       <KeyboardAvoidingView 
+          behavior={'padding'} 
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }} 
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
       <ImageBackground
         source={bgImage}
         resizeMode="cover"
@@ -74,8 +85,6 @@ export default function RegisterScreen() {
           marginTop: -28,
         }}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
             <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#111827' }}>Sign up</Text>
             <View style={{ width: 64, height: 4, backgroundColor: ACCENT, borderRadius: 2, marginTop: 6, marginBottom: 20 }} />
 
@@ -193,9 +202,10 @@ export default function RegisterScreen() {
                 <Text style={{ color: ACCENT, fontWeight: '700' }} onPress={() => router.push('/')}>Login</Text>
               </Text>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+          
       </View>
+      </ScrollView>
+        </KeyboardAvoidingView>
     </View>
   );
 }

@@ -1,16 +1,24 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getItem } from '../lib/mmkv';
+import {
+  OrderStatus,
+  UserRole,
+  canUserUpdateStatus,
+  getAvailableStatusUpdates,
+  getStatusColor,
+  getStatusDisplayName
+} from '../lib/rolePermissions';
 import { supabase } from '../lib/supabase';
 
 type Order = {
   id: string;
   user_id: string;
   order_number: string;
-  status: string;
+  status: OrderStatus;
   final_amount: number;
   created_at: string;
 };
@@ -31,23 +39,93 @@ export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<Record<string, OrderItem[]>>({});
   const [userId, setUserId] = useState<string | null>(null);
-  const [role, setRole] = useState<'seller' | 'operator'>('seller');
+  const [role, setRole] = useState<UserRole>('seller');
+
+  const handleStatusUpdate = async (orderId: string, currentStatus: OrderStatus, newStatus: OrderStatus) => {
+    // Check if user has permission to update status
+    if (!canUserUpdateStatus(role, currentStatus, newStatus)) {
+      Alert.alert(
+        'Permission Denied', 
+        `You don't have permission to update status from ${getStatusDisplayName(currentStatus)} to ${getStatusDisplayName(newStatus)}`
+      );
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (error) {
+        Alert.alert('Error', 'Failed to update order status');
+        console.error('Status update error:', error);
+      } else {
+        // Update local state
+        setOrders(prevOrders => 
+          prevOrders.map(order => 
+            order.id === orderId ? { ...order, status: newStatus } : order
+          )
+        );
+        Alert.alert('Success', `Order status updated to ${getStatusDisplayName(newStatus)}`);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update order status');
+      console.error('Status update error:', error);
+    }
+  };
+
+  const showStatusUpdateOptions = (order: Order) => {
+    const availableStatuses = getAvailableStatusUpdates(role, order.status);
+    
+    if (availableStatuses.length === 0) {
+      Alert.alert('No Updates Available', 'No status updates are available for this order');
+      return;
+    }
+
+    const options = availableStatuses.map(status => ({
+      text: getStatusDisplayName(status),
+      onPress: () => handleStatusUpdate(order.id, order.status, status)
+    }));
+
+    options.push({ text: 'Cancel', onPress: async () => {} });
+
+    Alert.alert(
+      'Update Order Status',
+      `Current status: ${getStatusDisplayName(order.status)}`,
+      options
+    );
+  };
 
   useEffect(() => {
     const init = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const uid = sessionData?.session?.user?.id ?? null;
       setUserId(uid);
-      // Prefer persisted user_type if present
-      const persisted = getItem('user_type');
-      if (persisted === 'operator' || persisted === 'seller') {
-        setRole(persisted as 'operator' | 'seller');
-        return;
+      
+      if (uid) {
+        // Fetch user_type from profiles table
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('user_type')
+          .eq('id', uid)
+          .single();
+        
+        if (profileError) {
+          console.error('Profile fetch error:', profileError);
+          // Fallback to persisted user_type
+          const persisted = getItem('user_type');
+          if (persisted === 'operator' || persisted === 'seller') {
+            setRole(persisted as UserRole);
+          }
+        } else {
+          console.log('Profile user_type:', profile.user_type);
+          const userType = profile.user_type as UserRole;
+          if (userType === 'operator' || userType === 'seller') {
+            setRole(userType);
+          }
+        }
       }
-      // Fallback to role from user metadata if present
-      const r = (sessionData?.session?.user?.app_metadata as any)?.role
-        || (sessionData?.session?.user?.user_metadata as any)?.role;
-      if (r === 'operator') setRole('operator');
     };
     init();
   }, []);
@@ -80,7 +158,7 @@ export default function OrdersScreen() {
   }, [userId]);
 
   const filteredOrders = useMemo(() => {
-    return orders.filter((o) => (activeTab === 'pending' ? o.status !== 'delivered' && o.status !== 'cancelled' : o.status === 'delivered'));
+    return orders.filter((o) => (activeTab === 'pending' ? o.status !== 'completed' : o.status === 'completed'));
   }, [orders, activeTab]);
 
   const incrementItem = async (orderId: string, item: OrderItem, delta: number) => {
@@ -94,7 +172,7 @@ export default function OrdersScreen() {
     }));
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
+  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
     if (role !== 'operator') return;
     await supabase.from('orders').update({ status }).eq('id', orderId);
     setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
@@ -133,7 +211,19 @@ export default function OrdersScreen() {
               <Text style={styles.cardTitle}>#{order.order_number || order.id.slice(0, 6)}</Text>
               <Text style={styles.cardAmount}>₹{order.final_amount}</Text>
             </View>
-            <Text style={styles.cardSub}>Status: {order.status}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={styles.cardSub}>Status: </Text>
+              <View style={{ 
+                backgroundColor: getStatusColor(order.status), 
+                paddingHorizontal: 8, 
+                paddingVertical: 4, 
+                borderRadius: 12 
+              }}>
+                <Text style={{ color: 'white', fontWeight: '600', fontSize: 12 }}>
+                  {getStatusDisplayName(order.status)}
+                </Text>
+              </View>
+            </View>
             <Text style={styles.cardSub}>Date: {new Date(order.created_at).toLocaleString()}</Text>
 
             {(orderItemsByOrderId[order.id] || []).map((it) => (
@@ -156,10 +246,26 @@ export default function OrdersScreen() {
               </View>
             ))}
 
-            {role === 'operator' && (
+            {(role === 'operator' || role === 'seller') && (
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 12 }}>
-                <Pressable onPress={() => updateOrderStatus(order.id, 'delivered')} style={styles.primaryBtn}>
-                  <Text style={styles.primaryBtnText}>Mark Delivered</Text>
+                <Pressable 
+                  onPress={() => showStatusUpdateOptions(order)} 
+                  style={[
+                    styles.primaryBtn,
+                    { 
+                      backgroundColor: getAvailableStatusUpdates(role, order.status).length > 0 
+                        ? '#4CAF50' 
+                        : '#9E9E9E' 
+                    }
+                  ]}
+                  disabled={getAvailableStatusUpdates(role, order.status).length === 0}
+                >
+                  <Text style={styles.primaryBtnText}>
+                    {getAvailableStatusUpdates(role, order.status).length > 0 
+                      ? 'Update Status' 
+                      : 'No Updates Available'
+                    }
+                  </Text>
                 </Pressable>
               </View>
             )}

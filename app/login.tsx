@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Image, ImageBackground, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { setItem } from '../lib/mmkv';
 import { supabase } from '../lib/supabase';
 
@@ -29,9 +29,38 @@ export default function LoginScreen() {
       Alert.alert('Login Failed', error.message);
     } else if (data.session) {
       try {
-        const role = (data.session.user?.app_metadata as any)?.role || (data.session.user?.user_metadata as any)?.role || 'seller';
-        setItem('user_type', role);
-      } catch (e) {}
+        const userId = data.session.user?.id;
+        console.log('User data:', data.session.user);
+        console.log('User metadata:', data.session.user?.user_metadata);
+        
+        // Fetch user profile from profiles table
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('user_type, full_name, phone, address')
+          .eq('id', userId)
+          .single();
+        
+        if (profileError) {
+          console.error('Profile fetch error:', profileError);
+          // Fallback to default user_type
+          const userType = 'seller';
+          setItem('user_type', userType);
+          setItem('user_id', userId || '');
+          setItem('user_email', data.session.user?.email || '');
+          setItem('user_name', data.session.user?.user_metadata?.full_name || '');
+        } else {
+          console.log('Profile data:', profile);
+          const userType = profile.user_type || 'seller';
+          setItem('user_type', userType);
+          setItem('user_id', userId || '');
+          setItem('user_email', data.session.user?.email || '');
+          setItem('user_name', profile.full_name || data.session.user?.user_metadata?.full_name || '');
+          setItem('user_phone', profile.phone || '');
+          setItem('user_address', profile.address || '');
+        }
+      } catch (e) {
+        console.error('Error setting user data:', e);
+      }
       router.replace('/products');
     }
   };
@@ -51,12 +80,16 @@ export default function LoginScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: ACCENT }}>
-      <ImageBackground
-        source={bgImage}
-        resizeMode="cover"
-        style={{ height: '40%', justifyContent: 'flex-end' }}
-        imageStyle={{ opacity: 0.2 }}
-      >
+       <KeyboardAvoidingView 
+          behavior={'padding'} 
+          style={{ flex: 1 }}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <ScrollView 
+            contentContainerStyle={{ flexGrow: 1, paddingBottom: 24 }} 
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
         <View style={{ paddingTop: 48, paddingHorizontal: 20, paddingBottom: 20 }}>
           <Image
             source={logo}
@@ -65,7 +98,6 @@ export default function LoginScreen() {
             resizeMode="contain"
           />
         </View>
-      </ImageBackground>
 
       <View
         style={{
@@ -78,8 +110,7 @@ export default function LoginScreen() {
           marginTop: -28,
         }}
       >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+       
             <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#111827' }}>Sign in</Text>
             <View style={{ width: 64, height: 4, backgroundColor: ACCENT, borderRadius: 2, marginTop: 6, marginBottom: 20 }} />
 
@@ -144,9 +175,10 @@ export default function LoginScreen() {
                 </Text>
               </Text>
             </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
+         
       </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
