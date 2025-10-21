@@ -8,21 +8,40 @@ export default function IndexGate() {
 
   useEffect(() => {
     let mounted = true;
+
     (async () => {
       try {
-        // Try to restore from MMKV first
+        // 1️⃣ Try restoring the Supabase session manually (if needed)
         await restoreSupabaseSession();
-        // Then read current session from Supabase
-        const { data } = await supabase.auth.getSession();
+
+        // 2️⃣ Get the current session (from Supabase's MMKV adapter)
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) console.warn('getSession error:', error);
+
         const hasSession = !!data.session;
+
+        // 3️⃣ Optional: Check auth.uid() via RPC to ensure it’s valid
+        // const { data: uidCheck } = await supabase.rpc('uid_check');
+        // console.log('auth.uid():', uidCheck);
+
         if (!mounted) return;
-        router.replace(hasSession ? '/products' : '/login');
+
+        // 4️⃣ Route user to correct screen
+        if (hasSession) {
+          router.replace('/products');
+        } else {
+          router.replace('/login');
+        }
       } catch (e) {
-        if (!mounted) return;
-        router.replace('/login');
+        console.warn('IndexGate error:', e);
+        if (mounted) router.replace('/login');
       }
     })();
-    return () => { mounted = false; };
+
+    return () => {
+      mounted = false;
+    };
   }, [router]);
 
   return null;

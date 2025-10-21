@@ -35,7 +35,7 @@ type OrderItem = {
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'pending' | 'completed'|'cancelled'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'completed' | 'cancelled'>('pending');
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<Record<string, OrderItem[]>>({});
   const [userId, setUserId] = useState<string | null>(null);
@@ -48,6 +48,7 @@ export default function OrdersScreen() {
 
   // Fetch user session and role
   useEffect(() => {
+    
     const init = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const uid = sessionData?.session?.user?.id ?? null;
@@ -82,40 +83,38 @@ export default function OrdersScreen() {
     fetchOrders(true);
   }, [userId, activeTab]);
 
-  // Fetch orders function with pagination
   const fetchOrders = async (reset = false) => {
-    if (!userId || loadingMore || allLoaded) return;
+    if (loadingMore || allLoaded) return; // ❌ remove userId check here
     setLoadingMore(true);
-
+  
     const from = reset ? 0 : page * ORDERS_PER_PAGE;
     const to = from + ORDERS_PER_PAGE - 1;
-
+  
+    // Base query
     let query = supabase
-    .from('orders')
-    .select('id, user_id, order_number, status, final_amount, created_at, shipping_name')
-    .order('created_at', { ascending: false })
-    .range(from, to);
+      .from('orders')
+      .select('*')
   
-  if (role === 'seller') {
-    query = query.eq('user_id', userId);
-  }
+    // Role-based filtering
+    if (role === 'seller') {
+      query = query.eq('user_id', userId); // seller gets own orders only
+    }
+    // operator gets all orders (no filter)
   
-  const { data: ords, error } = await query;
-  
-      
-
+    const { data: ords, error } = await query;
+    console.log(ords?.length)
     if (error) {
       console.error('Fetch orders error:', error);
       setLoadingMore(false);
       return;
     }
-
+  
     if (!ords || ords.length === 0) {
       setAllLoaded(true);
       setLoadingMore(false);
       return;
     }
-
+  
     if (reset) {
       setOrders(ords);
       setPage(1);
@@ -125,23 +124,25 @@ export default function OrdersScreen() {
       setPage((prev) => prev + 1);
       if (ords.length < ORDERS_PER_PAGE) setAllLoaded(true);
     }
-
+  
     // Fetch order items
     const ids = ords.map((o) => o.id);
     const { data: items } = await supabase
       .from('order_items')
       .select('id, order_id, product_id, product_name, product_price, quantity, total_price')
       .in('order_id', ids);
-
+  
     const map: Record<string, OrderItem[]> = {};
-    (items || []).forEach((it: any) => {
+    (items || []).forEach((it) => {
       map[it.order_id] = map[it.order_id] || [];
       map[it.order_id].push(it);
     });
-
+  
     setOrderItemsByOrderId((prev) => ({ ...prev, ...map }));
     setLoadingMore(false);
   };
+  
+  
 
   // Filter orders based on active tab
   const filteredOrders = useMemo(() => {
@@ -154,7 +155,7 @@ export default function OrdersScreen() {
     }
     return orders;
   }, [orders, activeTab]);
-  
+
 
   // Handle order status update
   const handleStatusUpdate = async (orderId: string, currentStatus: OrderStatus) => {
@@ -320,7 +321,7 @@ export default function OrdersScreen() {
                     {role === 'operator' ? (
                       <>
                         <Pressable
-                          style={[styles.qtyBtn,activeTab === 'pending' && order.status === "pending" ?{ backgroundColor: '#d7ecae'}:null]}
+                          style={[styles.qtyBtn, activeTab === 'pending' && order.status === "pending" ? { backgroundColor: '#d7ecae' } : null]}
 
                           onPress={() => (activeTab === 'pending' && order.status === "pending" ? incrementItem(order.id, it, -1) : undefined)}
                         >
@@ -328,7 +329,7 @@ export default function OrdersScreen() {
                         </Pressable>
                         <Text style={styles.qtyVal}>{it.quantity}</Text>
                         <Pressable
-                          style={[styles.qtyBtn,activeTab === 'pending' && order.status === "pending" ?{ backgroundColor: '#d7ecae'}:null]}
+                          style={[styles.qtyBtn, activeTab === 'pending' && order.status === "pending" ? { backgroundColor: '#d7ecae' } : null]}
                           onPress={() => (activeTab === "pending" && order.status === "pending" ? incrementItem(order.id, it, 1) : undefined)}
                         >
                           <Ionicons name="add" size={ICON_SIZE} color={ICON_COLOR} />
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     borderRadius: 12,
     overflow: 'hidden',
-    borderWidth:1,
+    borderWidth: 1,
   },
   tab: {
     flex: 1,
