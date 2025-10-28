@@ -39,16 +39,22 @@ export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderItemsByOrderId, setOrderItemsByOrderId] = useState<Record<string, OrderItem[]>>({});
   const [userId, setUserId] = useState<string | null>(null);
-  const [role, setRole] = useState<UserRole>('seller');
+  const [role, setRole] = useState<UserRole>();
 
   const [page, setPage] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [allLoaded, setAllLoaded] = useState(false);
   const ORDERS_PER_PAGE = 10;
+  const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => {
+    if (role && userId && orders.length === 0 && !loadingMore && !refreshing) {
+      handleRefresh();
+    }
+  }, [role, userId]);
   // Fetch user session and role
   useEffect(() => {
-    
+
     const init = async () => {
       const { data: sessionData } = await supabase.auth.getSession();
       const uid = sessionData?.session?.user?.id ?? null;
@@ -77,44 +83,63 @@ export default function OrdersScreen() {
     init();
   }, []);
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    setAllLoaded(false);
+    setPage(0);
+    await fetchOrders(true);  // reset = true to reload from start
+    setRefreshing(false);
+  };
+
   // Fetch orders when userId or tab changes
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !role) return;
     fetchOrders(true);
-  }, [userId, activeTab]);
+  }, [userId, activeTab, role]);
 
   const fetchOrders = async (reset = false) => {
     if (loadingMore || allLoaded) return; // ❌ remove userId check here
     setLoadingMore(true);
-  
+
     const from = reset ? 0 : page * ORDERS_PER_PAGE;
     const to = from + ORDERS_PER_PAGE - 1;
-  
+
     // Base query
+    // let query = supabase
+    //   .from('orders')
+    //   .select('*')
+
+    // Role-based filtering
+    // if (role === 'seller') {
+    //   query = query.eq('user_id', userId); // seller gets own orders only
+    // }
+    // operator gets all orders (no filter)
+
+    // const { data: ords, error } = await query;
     let query = supabase
       .from('orders')
       .select('*')
-  
-    // Role-based filtering
-    if (role === 'seller') {
-      query = query.eq('user_id', userId); // seller gets own orders only
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (role !== 'operator') {
+      query = query.eq('user_id', userId);
     }
-    // operator gets all orders (no filter)
-  
     const { data: ords, error } = await query;
-    console.log(ords?.length)
+
+
     if (error) {
       console.error('Fetch orders error:', error);
       setLoadingMore(false);
       return;
     }
-  
+
     if (!ords || ords.length === 0) {
       setAllLoaded(true);
       setLoadingMore(false);
       return;
     }
-  
+
     if (reset) {
       setOrders(ords);
       setPage(1);
@@ -124,25 +149,25 @@ export default function OrdersScreen() {
       setPage((prev) => prev + 1);
       if (ords.length < ORDERS_PER_PAGE) setAllLoaded(true);
     }
-  
+
     // Fetch order items
     const ids = ords.map((o) => o.id);
     const { data: items } = await supabase
       .from('order_items')
       .select('id, order_id, product_id, product_name, product_price, quantity, total_price')
       .in('order_id', ids);
-  
+
     const map: Record<string, OrderItem[]> = {};
     (items || []).forEach((it) => {
       map[it.order_id] = map[it.order_id] || [];
       map[it.order_id].push(it);
     });
-  
+
     setOrderItemsByOrderId((prev) => ({ ...prev, ...map }));
     setLoadingMore(false);
   };
-  
-  
+
+
 
   // Filter orders based on active tab
   const filteredOrders = useMemo(() => {
@@ -166,11 +191,10 @@ export default function OrdersScreen() {
       Alert.alert('Not Allowed', 'Completed orders cannot be updated.');
       return;
     }
-
     const newStatus = statusOrder[currentIndex + 1];
     if (!newStatus) return;
 
-    const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
+    const { data, error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
     if (error) {
       Alert.alert('Error', 'Failed to update order status');
     } else {
@@ -392,6 +416,8 @@ export default function OrdersScreen() {
               </View>
             ) : null
           }
+          refreshing={refreshing}
+          onRefresh={handleRefresh}
         />
       )}
     </SafeAreaView>

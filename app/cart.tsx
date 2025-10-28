@@ -169,7 +169,7 @@ export default function CartScreen() {
             <Image source={{ uri: item.product?.image_url }} style={styles.itemImage} />
             <View style={{ flex: 1 }}>
               <Text style={styles.itemTitle}>{item.product?.name}</Text>
-              <Text style={styles.itemPrice}>${item.product?.price.toFixed(2)}</Text>
+              <Text style={styles.itemPrice}>₹{item.product?.price.toFixed(2)}</Text>
               <View style={styles.qtyRow}>
                 <TouchableOpacity onPress={() => handleQuantity(item.id, -1)}>
                   <Ionicons name="remove-circle-outline" size={22} color="#555" />
@@ -189,19 +189,19 @@ export default function CartScreen() {
           <View style={styles.summaryContainer}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryText}>Sub total</Text>
-              <Text style={styles.summaryValue}>${subtotal}</Text>
+              <Text style={styles.summaryValue}>₹{subtotal}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryText}>Shipping</Text>
-              <Text style={styles.summaryValue}>${shipping}</Text>
+              <Text style={styles.summaryValue}>₹{shipping}</Text>
             </View>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryText}>Tax (15%)</Text>
-              <Text style={styles.summaryValue}>${tax}</Text>
+              <Text style={styles.summaryText}>Tax (0%)</Text>
+              <Text style={styles.summaryValue}>₹{tax}</Text>
             </View>
             <View style={[styles.summaryRow, { marginTop: 8 }]}>
               <Text style={styles.totalText}>Total</Text>
-              <Text style={styles.totalValue}>${total}</Text>
+              <Text style={styles.totalValue}>₹{total}</Text>
             </View>
             <TouchableOpacity style={styles.checkoutButton} onPress={handlePlaceOrder}>
               <Text style={styles.checkoutText}>CHECKOUT</Text>
